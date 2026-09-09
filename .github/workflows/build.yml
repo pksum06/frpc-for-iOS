@@ -23,7 +23,7 @@ jobs:
 
           cat > /tmp/ios-clang <<EOF
           #!/bin/bash
-          exec "$CLANG" -isysroot "$SDK" -target arm64-apple-ios12.0 "$@"
+          exec "$CLANG" -isysroot "$SDK" -target arm64-apple-ios12.0 "\$@"
           EOF
           chmod +x /tmp/ios-clang
 
@@ -34,11 +34,15 @@ jobs:
           export CGO_CFLAGS="-isysroot $SDK -target arm64-apple-ios12.0"
           export CGO_LDFLAGS="-isysroot $SDK -target arm64-apple-ios12.0"
 
+          echo '=== clang wrapper ==='
+          cat /tmp/ios-clang
+
           go build -trimpath -ldflags="-s -w" -o frpc-ios-arm64 ./cmd/frpc
 
-          file frpc-ios-arm64 || true
-          otool -L frpc-ios-arm64 || true
-          vtool -show-build frpc-ios-arm64 || true
+          echo '=== binary info ==='
+          file frpc-ios-arm64
+          otool -L frpc-ios-arm64
+          vtool -show-build frpc-ios-arm64
 
       - uses: actions/upload-artifact@v4
         with:
