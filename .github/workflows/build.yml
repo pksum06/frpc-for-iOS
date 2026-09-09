@@ -13,11 +13,34 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Build frpc
+      - name: Build frpc for real iOS device
+        shell: bash
         run: |
-          GOOS=ios GOARCH=arm64 CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o frpc ./cmd/frpc
+          set -euxo pipefail
+
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          CLANG="$(xcrun --sdk iphoneos --find clang)"
+
+          cat > /tmp/ios-clang <<EOF
+          #!/bin/bash
+          exec "$CLANG" -isysroot "$SDK" -target arm64-apple-ios12.0 "$@"
+          EOF
+          chmod +x /tmp/ios-clang
+
+          export GOOS=ios
+          export GOARCH=arm64
+          export CGO_ENABLED=1
+          export CC=/tmp/ios-clang
+          export CGO_CFLAGS="-isysroot $SDK -target arm64-apple-ios12.0"
+          export CGO_LDFLAGS="-isysroot $SDK -target arm64-apple-ios12.0"
+
+          go build -trimpath -ldflags="-s -w" -o frpc-ios-arm64 ./cmd/frpc
+
+          file frpc-ios-arm64 || true
+          otool -L frpc-ios-arm64 || true
+          vtool -show-build frpc-ios-arm64 || true
 
       - uses: actions/upload-artifact@v4
         with:
           name: frpc-ios-arm64
-          path: frpc
+          path: frpc-ios-arm64
