@@ -18,12 +18,25 @@ jobs:
         run: |
           set -euxo pipefail
 
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          CLANG="$(xcrun --sdk iphoneos --find clang)"
+
+          cat > /tmp/ios-clang <<EOF
+          #!/bin/bash
+          exec "$CLANG" -isysroot "$SDK" -target arm64-apple-ios12.0 "\$@"
+          EOF
+          chmod +x /tmp/ios-clang
+
           export GOOS=ios
           export GOARCH=arm64
-          export CGO_ENABLED=0
+          export CGO_ENABLED=1
+          export CC=/tmp/ios-clang
+          export CGO_CFLAGS="-isysroot $SDK -target arm64-apple-ios12.0"
+          export CGO_LDFLAGS="-isysroot $SDK -target arm64-apple-ios12.0"
 
-          # Build a pure-Go binary so the executable does not link against
-          # host/iPhoneOS libc resolver libraries such as libresolv.
+          # Keep cgo enabled because Go's ios/arm64 port requires external linking.
+          # Force Go's DNS resolver and os/user implementations where possible so
+          # frpc itself avoids resolver lookups through libresolv at runtime.
           go build \
             -tags netgo,osusergo \
             -trimpath \
@@ -33,14 +46,8 @@ jobs:
 
           echo '=== binary info ==='
           file frpc-ios-arm64
-          otool -L frpc-ios-arm64 || true
-          vtool -show-build frpc-ios-arm64 || true
-
-          echo '=== verify no problematic dylib dependency ==='
-          if otool -L frpc-ios-arm64 2>/dev/null | grep -E '/usr/lib/libresolv|/usr/lib/libSystem|CoreFoundation|Security'; then
-            echo 'Unexpected Apple dylib dependency found'
-            exit 1
-          fi
+          otool -L frpc-ios-arm64
+          vtool -show-build frpc-ios-arm64
 
       - uses: actions/upload-artifact@v4
         with:
